@@ -28,25 +28,26 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
                              alphaIncrement=1,
                              alphaDecrement=1,
                              maxIter=2,
-                             default_buffer = 2000,
-                             other_buffers=c(2000),
+                             default_buffer = 200000,
+                             other_buffers=c(200000),
+                             tolerance=5,
                              clipToCoast="terrestrial",
                              land_file = NULL,
                              proj='+proj=longlat +datum=WGS84',
                              save.outputs = TRUE,
-                             do.parallel		= TRUE,
+                             do.parallel = FALSE,
                              ncores = NULL,
                              verbose = TRUE) {
   #----------------------------------------
   #= 0.Check packages
   #----------------------------------------
   # check if required packages are available
-  pkgs.required = c("rgdal","raster","geosphere","parallel","doParallel","dismo","rangeBuilder","data.table")
-  pkgs.available = sapply(pkgs.required, require, quietly = TRUE, character.only=TRUE)
-  if(!any(pkgs.available)){
-    warning(paste('Packages',paste(pkgs.required[!pkgs.available],collapse=', '),'failed to load'))
-    stop("Try to re-install packages that failed to load")
-  }
+  # pkgs.required = c("rgdal","raster","geosphere","parallel","doParallel","dismo","rangeBuilder","data.table")
+  # pkgs.available = sapply(pkgs.required, require, quietly = TRUE, character.only=TRUE)
+  # if(!any(pkgs.available)){
+  #   warning(paste('Packages',paste(pkgs.required[!pkgs.available],collapse=', '),'failed to load'))
+  #   stop("Try to re-install packages that failed to load")
+  # }
   if(verbose){
     cat('#=================\n')
     cat('#= 1. Check inputs\n')
@@ -77,11 +78,14 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
 
   coastline = NULL
   if(!is.null(land_file)){
-    # The default is provided by the Global Self-Consistent Hierarchical High-resolution Geography Database (GSHHG) via the package 'rangeBuilder')
-    # Tip: high land basemap resolution may help to avoid crashes of the script
     coastline = suppressMessages(
       if(tryCatch(file.exists(land_file) && !dir.exists(land_file),error=function(err) FALSE))  switch(stringr::str_extract(basename(land_file),'(?>.{3}$)'), 'shp' = sf::st_read(land_file), 'rds' = readRDS(land_file)) else if(inherits(land_file,"sf")) land_file else NULL
     )
+  }
+  if(is.null(coastline)){
+    # The default is world land map at 50m resolution prodived by @naturalearth via the package 'rangeBuilder')
+    # Tip: high land basemap resolution may help to avoid crashes of the script
+    coastline = rangeBuilder:::loadWorldMap()
   }
 
   if(do.parallel){
@@ -116,8 +120,8 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
     }
     if(binom_col<1 || binom_col>ncol(occ_data))
       stop("Argument 'binom_col' is invalid")
-    is.duplicated <- duplicated(occ_data[,binom_col])
-    if(length(is.duplicated)>0L)
+    is.duplicated <- duplicated(occ_data)
+    if(sum(is.duplicated)>0L)
       warning("The dataset contains duplicated records!")
     list.species 	<- c(as.character(unique(occ_data[, binom_col]))) # select species
   }else if(data_flag){
@@ -132,8 +136,8 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
     }
     if(binom_col<1 || binom_col>ncol(occ_data))
       stop("Argument 'binom_col' is invalid")
-    is.duplicated <- duplicated(occ_data[,binom_col])
-    if(length(is.duplicated)>0L)
+    is.duplicated <- duplicated(occ_data)
+    if(sum(is.duplicated)>0L)
       warning("The dataset contains duplicated records!")
     list.species 	<- c(as.character(unique(occ_data[, binom_col]))) # select species
   }
@@ -154,10 +158,10 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
     stop("Parameter 'initialAlpha' must be > 0")
   if(alphaIncrement<=0)
     stop("Parameter 'alphaIncrement' must be > 0")
-  if(!is.null(coastline)){
-    if(inherits(coastline,"SpatialPolygonsDataFrame"))
-      clipToCoast	= "no"
-  }
+  # if(!is.null(coastline)){
+  #   if(inherits(coastline,c("sf","SpatialPolygonsDataFrame")))
+  #     clipToCoast	= "no"
+  # }
   if(verbose & do.parallel){
     cat('#============================\n')
     cat('#= 3. Set parallel processing\n')
@@ -168,7 +172,7 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
     if(exists('occ_data', envir = environment()))
       toExport <- append(toExport,c("occ_data", "binom_col"))
     if(!is.null(coastline)){
-      if(inherits(coastline,"SpatialPolygonsDataFrame")|inherits(coastline,"SpatialPolygons"))
+      if(inherits(coastline,c("sf","SpatialPolygonsDataFrame","SpatialPolygons")))
         toExport <- append(toExport,"coastline")
     }
 
@@ -192,7 +196,9 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
   }
   # Time starts
   started.at <- Sys.time()
-  list.species.polygons <- foreach::foreach(k = list.species, .packages = c("geosphere", "rangeBuilder", "dismo", "raster", "data.table", "AlphaHullRangeModeller","sf"), .export=toExport) %dopar% {
+  list.species.polygons <- foreach::foreach(k = list.species,
+                                            .packages = c("rangeBuilder", "dismo", "data.table", "AlphaHullRangeModeller","sf"),
+                                            .export=toExport) %dopar% {
 
     out = tryCatch({
 
@@ -200,7 +206,7 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
       if(file.exists(k)){
         # reads as data.table
         species.data <- tryCatch(data.table::fread(k) ,	error = function(err) return(NULL))
-        k = gsub("\\.csv","",basename(k))
+        k = gsub("\\.csv$","",basename(k))
       }else{
         species.data 	<- tryCatch({
           subset(occ_data, as.character(occ_data[, binom_col]) == k)
@@ -210,7 +216,7 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
         })
       }
       # Print species name
-      print(sprintf("Species name: %s", k))
+      if(verbose) print(sprintf("Species name: %s", k))
       flush.console()
 
       # if an error occurred during the loading/reading returns an empty polygon list
@@ -249,20 +255,23 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
       colnames(species.data)[id_y_lat] = "lat"
 
       # make sure coordinates are numeric
-      species.data[, c("long", "lat")][, !sapply(species.data[, c("long", "lat")], is.numeric)] <-
-        sapply(species.data[, c("long", "lat")][, !sapply(species.data[, c("long", "lat")], is.numeric)], function(f)
-          as.numeric(levels(f))[f])
+      if(any(!sapply(species.data[, c("long", "lat")], is.numeric))){
+        species.data[, c("long", "lat")][, !sapply(species.data[, c("long", "lat")], is.numeric)] <-  
+          sapply(species.data[, c("long", "lat")][, !sapply(species.data[, c("long", "lat")], is.numeric)], 
+                 function(f)if(is.factor(f)) as.numeric(levels(f))[f] else as.numeric(f))        
+      }
 
       # clean data
       NA_to_remove <- !complete.cases(species.data[, c("long", "lat")]) # find NA's
-      Dup_to_remove <- duplicated(round(species.data[, c("long", "lat")],5)) # find duplicates
+      Dup_to_remove <- duplicated(round(species.data[, c("long", "lat")], tolerance)) # find duplicates
       Rows_to_remove <- NA_to_remove | Dup_to_remove
       species.data.cleaned	<- species.data[!Rows_to_remove, ] # remove Na's and duplicates
 
       # compute distance to meridians +/- 180°
-      distTo180	<- geosphere::distGeo(p1 = species.data.cleaned[, c("long", "lat")], p2 = cbind(long = 180, lat = species.data.cleaned[, "lat"]))
+      distTo180	<- geosphere::distGeo(p1 = species.data.cleaned[, c("long", "lat")],
+                                      p2 = cbind(long = 180, lat = species.data.cleaned[, "lat"]))
       # compute the "1/10th max" buffer
-      one_tenth 	<- get_OneTenth_distmax(species.data.cleaned,default_buffer)
+      one_tenth 	<- get_OneTenth_distmax(species.data.cleaned, default_buffer)
       id.edges	<- which(distTo180 < one_tenth)
 
       # Get alpha hull polygon(s)
@@ -273,7 +282,7 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
         #central
         species.data.central <- species.data.cleaned[-id.edges, ]
         onetenth = get_OneTenth_distmax(species.data.central,default_buffer)
-        species.polygons.central = PolygonMaker(species.data.central,
+        species.polygons.central = suppressMessages(PolygonMaker(species.data.central,
                                                 fraction = fraction,
                                                 partCount = partCount,
                                                 buffer = onetenth,
@@ -281,7 +290,9 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
                                                 alphaIncrement = alphaIncrement,
                                                 alphaDecrement = alphaDecrement,
                                                 clipToCoast = clipToCoast,
-                                                coastline = coastline)
+                                                coastline = coastline,
+                                                proj=proj))
+
         # West
         if (nrow(subset(species.data.cleaned[id.edges, ], long <0)) > 0L) {
           species.data.west <- subset(species.data.cleaned[id.edges, ], long < 0)
@@ -289,7 +300,7 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
 
           west.buff <- floor(min(distTo180[which(distTo180 < one_tenth & species.data.cleaned$long < 0)])) / 2.
 
-          species.polygons.west=PolygonMaker(species.data.west,
+          species.polygons.west=suppressMessages(PolygonMaker(species.data.west,
                                              fraction = 1,
                                              partCount = partCount,
                                              buffer = onetenth,
@@ -298,7 +309,8 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
                                              alphaDecrement = alphaDecrement,
                                              clipToCoast = clipToCoast,
                                              coastline = coastline,
-                                             other_buffers = west.buff)
+                                             proj=proj,
+                                             other_buffers = west.buff))
         }
 
         # East
@@ -306,7 +318,7 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
           species.data.east <- subset(species.data.cleaned[id.edges, ], long > 0)
           onetenth = get_OneTenth_distmax(species.data.east,default_buffer)
           east.buff <- floor(min(distTo180[which(distTo180 < one_tenth & species.data.cleaned$long > 0)])) / 2.
-          species.polygons.west=PolygonMaker(species.data.west,
+          species.polygons.east=suppressMessages(PolygonMaker(species.data.east,
                                              fraction = 1,
                                              partCount = partCount,
                                              buffer = onetenth,
@@ -315,34 +327,40 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
                                              alphaDecrement = alphaDecrement,
                                              clipToCoast = clipToCoast,
                                              coastline = coastline,
-                                             other_buffers = east.buff)
+                                             proj=proj,
+                                             other_buffers = east.buff))
         }
 
         #bind polygons
         edged.polygons	<- list(
-          if (is.list(species.polygons.east))
+          if (inherits(species.polygons.east,"list"))
             unlist(species.polygons.east)
           else
             species.polygons.east,
-          if (is.list(species.polygons.west))
+          if (inherits(species.polygons.west,"list"))
             unlist(species.polygons.west)
           else
             species.polygons.west
         )
-        centered.polygons 	<-  if (is.list(species.polygons.central))  species.polygons.central else list(species.polygons.central)
-        all.polygons 		<-  if (length(edged.polygons[!is.na(edged.polygons)]) > 0L) append(centered.polygons, do.call(rbind, edged.polygons[!is.na(edged.polygons)])) else centered.polygons
-        species.polygons	<- 	if (length(all.polygons[!is.na(all.polygons)]) > 0L) do.call(rbind, all.polygons[!is.na(all.polygons)])	else list()
+
+        centered.polygons 	<-  if (inherits(species.polygons.central,"list"))  species.polygons.central else list(species.polygons.central)
+        all.polygons 		<-  if (length(edged.polygons[!is.na(edged.polygons)]) > 0L) c(centered.polygons, edged.polygons[!is.na(edged.polygons)]) else centered.polygons
+        species.polygons	<- 	if (length(all.polygons[!is.na(all.polygons)]) > 0L) Reduce("c",all.polygons[!is.na(all.polygons)])	else list()
 
         #put them in a list to add points
-        if (length(species.polygons) == 0L)
+        if (length(species.polygons) == 0L){
           species.polygons <- list(NA)
-        else species.polygons <- list(species.polygons)
-
-      }
-      else{
-
+        }else{
+          # Assign species name to the polygon(s)
+          species.polygons <- list(
+            sf::st_sf(data.frame(species=rep(k, length(species.polygons)),
+                                                   geom=species.polygons))
+          )
+          }
+        
+        }else{
         # Get polygons
-        species.polygons	<- PolygonMaker(species.data.cleaned,
+        species.polygons	<- suppressMessages(PolygonMaker(species.data.cleaned,
                                          fraction = fraction,
                                          partCount = partCount,
                                          buffer = one_tenth,
@@ -351,95 +369,66 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
                                          alphaDecrement  = alphaDecrement,
                                          other_buffers = one_tenth,
                                          clipToCoast = clipToCoast,
-                                         coastline=coastline)
+                                         coastline=coastline,
+                                         proj=proj))
+        species.polygons <- list(
+          sf::st_sf(data.frame(species=rep(k, length(species.polygons)),
+                               geom=sf::st_geometry(species.polygons)))
+        )
       }
 
-      # Assign species name to the polygon(s)
-      tryCatch({
-        names(species.polygons)[[1]] <- k
-        sf::st_geometry(species.polygons) <- k
-      },
-      error = function(err) {
-        species.polygons <- as(species.polygons, 'Spatial')
-        species.polygons	<- sp::spChFIDs(species.polygons, k)
-        species.polygons <- sf::st_as_sf(species.polygons)
-      })
-
-      # Keep occurrences and removed indices
-      if (!inherits(species.polygons,'list')) {
-        species.polygons <-list(species.polygons)
-        names(species.polygons)[[1]] <- k
-        sf::st_geometry(species.polygons[[1]]) <- k
-      }
       species.polygons$occ_points <-	species.data.cleaned[, c("long", "lat")]
       species.polygons$to_remove	<- 	which(Rows_to_remove)
 
       # Get potential error in coordinates
-      cooErrs <- rangeBuilder::coordError(species.data.cleaned[, c("long", "lat")], nthreads = 1)
+      cooErrs <- rangeBuilder::coordError(species.data.cleaned[, c("long", "lat")], nthreads = parallel::detectCores()-1)
       #distErr <- max(cooErrs,na.rm=TRUE)
 
       #save polygons and points
       if(save.outputs){
-        dir.create(file.path(output_dir,"Outputs","polygons", names(species.polygons)[[1]]), recursive =TRUE)
-        dir.create(file.path(output_dir,"Outputs","points", names(species.polygons)[[1]]), recursive = TRUE)
+        dir.create(file.path(output_dir,"Outputs","polygons", names(species.polygons)[1]), recursive =TRUE)
+        dir.create(file.path(output_dir,"Outputs","points", names(species.polygons)[1]), recursive = TRUE)
 
         if (!inherits(species.polygons[[1]],"sf")) return(NULL)
         sf::st_write(
             species.polygons[[1]],
             file.path(output_dir,
                       "Outputs",
-                      "polygons", names(species.polygons)[[1]]),
-            names(species.polygons)[[1]],
+                      "polygons", names(species.polygons)[1]),
+            names(species.polygons)[1],
             driver = "ESRI Shapefile",
             delete_layer = TRUE,
             quiet=TRUE
         )
         sf::st_write(
-          sf::st_as_sf(species.polygons$occ_points, coords=c(1,2), crs=sf::st_crs(species.polygons[[1]])),
+          sf::st_as_sf(species.polygons$occ_points,
+                       coords=c(1,2),
+                       crs=sf::st_crs(species.polygons[[1]])),
           file.path(output_dir,
                     "Outputs",
-                    "points", names(species.polygons)[[1]]),
-          names(species.polygons)[[1]],
+                    "points", names(species.polygons)[1]),
+          names(species.polygons)[1],
           driver = "ESRI Shapefile",
           delete_layer = TRUE,
           quiet=TRUE
         )
-        # writeOGR(
-        #   sp::SpatialPolygonsDataFrame(species.polygons[[1]], data = data.frame(ID = 1:lengths(species.polygons[[1]]))),
-        #   file.path(output_dir,
-        #             "Outputs",
-        #             "polygons", names(species.polygons)[[1]]),
-        #   names(species.polygons)[[1]],
-        #   driver = "ESRI Shapefile",
-        #   overwrite_layer = T
-        # )
-        # writeOGR(
-        #   sp::SpatialPointsDataFrame(
-        #     coords = species.polygons$occ_points,
-        #     data = data.frame(SpatialErrors = cooErrs),
-        #     proj4string = CRS(proj4string(species.polygons[[1]]))
-        #   ),
-        #   file.path(output_dir,
-        #             "Outputs",
-        #             "points", names(species.polygons)[[1]]),
-        #   names(species.polygons)[[1]],
-        #   driver = "ESRI Shapefile",
-        #   overwrite_layer = T
-        # )
       }
 
       species.polygons[[1]]
 
-    }, error=function(err){
+    }, 
+    error=function(err){
         return(err)
     },
     finally ={
       ## Stop the cluster
       doParallel::stopImplicitCluster()
+      # pkg_to_detach <- paste("package",c("rangeBuilder"), sep=":")
+      # lapply(pkg_to_detach, detach, character.only = TRUE, unload = TRUE)
     })
 
-    if(inherits(out,"try-error")){
-      cat(out)
+    if(inherits(out,"error")){
+      message(out)
       return(NULL)
     }
     return(out)

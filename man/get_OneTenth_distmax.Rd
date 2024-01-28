@@ -4,13 +4,12 @@
 \alias{get_OneTenth_distmax}
 \title{Calculate the "1/10th max" buffer method}
 \usage{
-get_OneTenth_distmax(x, default_buffer = 2000,
-  crs = CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"))
+get_OneTenth_distmax(x, default_buffer = 2e+05)
 }
 \arguments{
 \item{x}{A two-column data.frame of occurrence records coordinates of the species.}
 
-\item{default_buffer}{A numeric specifying the buffering distance in meters around each point in case the buffer method equals 0. Default is 2000 meters.}
+\item{default_buffer}{A numeric specifying the buffering distance in meters around each point in case the buffer method equals 0. Default is 200000 meters.}
 }
 \description{
 Computes the tenth of the maximum inter-point distance

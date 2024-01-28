@@ -4,13 +4,28 @@
 \alias{make_alpha_hulls}
 \title{Estimating the species distribution range with alpha-hulls}
 \usage{
-make_alpha_hulls(loc_data, output_dir = NULL, binom_col = NULL,
-  coordHeaders = NULL, fraction = 0.95, partCount = 10,
-  initialAlpha = 2, alphaIncrement = 1, alphaDecrement = 1,
-  maxIter = 2, default_buffer = 2000, other_buffers = c(2000),
-  clipToCoast = "terrestrial", land_file = NULL,
-  proj = "+proj=longlat +datum=WGS84", save.outputs = TRUE,
-  do.parallel = TRUE, ncores = NULL, verbose = TRUE)
+make_alpha_hulls(
+  loc_data,
+  output_dir = NULL,
+  binom_col = NULL,
+  coordHeaders = NULL,
+  fraction = 0.95,
+  partCount = 10,
+  initialAlpha = 2,
+  alphaIncrement = 1,
+  alphaDecrement = 1,
+  maxIter = 2,
+  default_buffer = 2e+05,
+  other_buffers = c(2e+05),
+  tolerance = 5,
+  clipToCoast = "terrestrial",
+  land_file = NULL,
+  proj = "+proj=longlat +datum=WGS84",
+  save.outputs = TRUE,
+  do.parallel = FALSE,
+  ncores = NULL,
+  verbose = TRUE
+)
 }
 \arguments{
 \item{loc_data}{A two-column matrix or data.frame or data.table or a character string specifying the path to your occurrence files directory (i.e. where species occurrence data files are stored) OR path to your species occurrence file (must be a csv file)}

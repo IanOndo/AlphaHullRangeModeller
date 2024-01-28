@@ -4,10 +4,21 @@
 \alias{PolygonMaker}
 \title{Generate an alpha-hull determine by the spatial distribution of points.}
 \usage{
-PolygonMaker(x, coordHeaders = NULL, fraction = 0.95, partCount = 10,
-  buffer, initialAlpha = 2, alphaIncrement = 1, alphaDecrement = 1,
-  maxIter = 2, other_buffers = c(2000), clipToCoast = "terrestrial",
-  coastline = NULL, proj = "+proj=longlat +datum=WGS84")
+PolygonMaker(
+  x,
+  coordHeaders = NULL,
+  fraction = 0.95,
+  partCount = 10,
+  buffer,
+  initialAlpha = 2,
+  alphaIncrement = 1,
+  alphaDecrement = 1,
+  maxIter = 2,
+  other_buffers = c(2e+05),
+  clipToCoast = "terrestrial",
+  coastline = NULL,
+  proj = "+proj=longlat +datum=WGS84"
+)
 }
 \arguments{
 \item{x}{A two-column data.frame of occurrence records coordinates of the species.}

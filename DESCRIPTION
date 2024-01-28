@@ -2,24 +2,23 @@ Package: AlphaHullRangeModeller
 Title: What the Package Does (One Line, Title Case)
 Version: 0.0.0.9000
 Authors@R: 
-    person(given = "First",
-           family = "Last",
+    person(given = "Ian",
+           family = "Ondo",
            role = c("aut", "cre"),
-           email = "first.last@example.com",
-           comment = c(ORCID = "YOUR-ORCID-ID"))
+           email = "iondo@kew.org",
+           comment = c(ORCID = "0000-0001-7816-5882"))
 Description: What the package does (one paragraph).
 License: What license it uses
 Encoding: UTF-8
 LazyData: true
 ByteCompile: true
-RoxygenNote: 6.1.1
+RoxygenNote: 7.2.3
 Imports: 
     rangeBuilder,
-    raster,
-    rgdal,
     geosphere,
     doParallel,
-    dismo,
-    data.table,
-    sp,
-    sf
+    data.table
+Depends:
+    doParallel
+Suggests:
+    RGeodata
