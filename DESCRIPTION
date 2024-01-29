@@ -1,5 +1,5 @@
 Package: AlphaHullRangeModeller
-Title: What the Package Does (One Line, Title Case)
+Title: Alpha-hulls range polygons for estimating species distribution
 Version: 0.0.0.9000
 Authors@R: 
     person(given = "Ian",
@@ -7,7 +7,7 @@ Authors@R:
            role = c("aut", "cre"),
            email = "iondo@kew.org",
            comment = c(ORCID = "0000-0001-7816-5882"))
-Description: What the package does (one paragraph).
+Description: The package helps generating alpha-hulls range polygons from a set of occurrence records.
 License: What license it uses
 Encoding: UTF-8
 LazyData: true

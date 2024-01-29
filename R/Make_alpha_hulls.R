@@ -49,9 +49,9 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
   #   stop("Try to re-install packages that failed to load")
   # }
   if(verbose){
-    cat('#=================\n')
-    cat('#= 1. Check inputs\n')
-    cat('#=================\n\n')
+    message('#=================')
+    message('#= 1. Check inputs')
+    message('#=================\n')
   }
   if(missing(loc_data))
     stop("Please a csv file or a data.frame or a matrix with longitude and latitude coordinates of species occurrence records.")
@@ -95,16 +95,16 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
   }
 
   if(verbose){
-    cat('#===================\n')
-    cat('#= 2. Set parameters\n')
-    cat('#===================\n\n')
+    message('#===================')
+    message('#= 2. Set parameters')
+    message('#===================\n')
   }
 
 
   if(verbose){
-    cat('#--------------------------------\n')
-    cat('#= 2.a Make a list of all species\n')
-    cat('#--------------------------------\n')
+    message('#--------------------------------')
+    message('#= 2.a Make a list of all species')
+    message('#--------------------------------')
   }
   if(dir_flag){
     list.species <- list.files(loc_data, pattern="\\.csv$", full.names=TRUE, recursive=TRUE) # select species
@@ -146,9 +146,9 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
   }
 
   if(verbose){
-    cat('#-----------------------------\n')
-    cat('#= 2.b Check parameters values\n')
-    cat('#-----------------------------\n')
+    message('#-----------------------------')
+    message('#= 2.b Check parameters values')
+    message('#-----------------------------')
   }
   if(fraction>1 | fraction<=0)
     stop("Parameter 'fraction' must be between > 0 and <= 1")
@@ -163,9 +163,9 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
   #     clipToCoast	= "no"
   # }
   if(verbose & do.parallel){
-    cat('#============================\n')
-    cat('#= 3. Set parallel processing\n')
-    cat('#============================\n\n')
+    message('#============================')
+    message('#= 3. Set parallel processing')
+    message('#============================\n')
   }
   if(do.parallel & length(list.species)>1){
     toExport <- c("fraction","partCount","initialAlpha","clipToCoast","alphaIncrement","alphaDecrement","default_buffer","save.outputs")# send objects to cluster nodes
@@ -197,7 +197,7 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
   # Time starts
   started.at <- Sys.time()
   list.species.polygons <- foreach::foreach(k = list.species,
-                                            .packages = c("rangeBuilder", "dismo", "data.table", "AlphaHullRangeModeller","sf"),
+                                            .packages = c("rangeBuilder", "data.table", "AlphaHullRangeModeller","sf"),
                                             .export=toExport) %dopar% {
 
     out = tryCatch({
@@ -439,10 +439,10 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
   doParallel::stopImplicitCluster()
   time_taken <- finished.at - started.at # calculate amount of time elapsed
   if(verbose){
-    cat(paste0('> End of Run on: ',Sys.time()),'\n\n');
-    cat(paste0('> Running time: ',as.numeric(time_taken),' ', attr(time_taken,'units'),'\n'))
-    cat(paste0('#',paste(rep('-',times=100),collapse="")))
-    cat('\n\n')
+    message(paste0('> End of Run on: ',Sys.time()),'\n');
+    message(paste0('> Running time: ',as.numeric(time_taken),' ', attr(time_taken,'units')))
+    message(paste0('#',paste(rep('-',times=100),collapse="")))
+    message('\n')
   }
 
   if(length(list.species.polygons)==1)

@@ -21,7 +21,7 @@ make_alpha_hulls(
   clipToCoast = "terrestrial",
   land_file = NULL,
   proj = "+proj=longlat +datum=WGS84",
-  save.outputs = TRUE,
+  save.outputs = FALSE,
   do.parallel = FALSE,
   ncores = NULL,
   verbose = TRUE
@@ -54,7 +54,7 @@ make_alpha_hulls(
 
 \item{clipToCoast}{A logical. Should the terrestrial \code{clipToCoast='terrestrial'}, the aquatic part \code{clipToCoast='aquatic'} or none part \code{clipToCoast='no'} part of the range be kept ?}
 
-\item{land_file}{An optional character string specifying a path to a land basemap (shapefile or rds file) for clipping species polygon ranges by lands.}
+\item{land_file}{An optional sf object or character string specifying a path to a land basemap (shapefile or rds file) for clipping species polygon ranges by lands.}
 
 \item{proj}{A character string specifying the projection of the coordinates}
 }
