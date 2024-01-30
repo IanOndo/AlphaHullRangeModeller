@@ -10,7 +10,7 @@
 #' @param initialAlpha A numeric specifying the starting value for the parameter alpha.
 #' @param coordHeaders A character string vector of length 2 specifying the names of the columns indicating the longitude and latitude respectively.
 #' @param clipToCoast A logical. Should the terrestrial \code{clipToCoast='terrestrial'}, the aquatic part \code{clipToCoast='aquatic'} or none part \code{clipToCoast='no'} part of the range be kept ?
-#' @param land_file  An optional character string specifying a path to a land basemap (shapefile or rds file) for clipping species polygon ranges by lands.
+#' @param land_file  An optional sf object or character string specifying a path to a land basemap (shapefile or rds file) for clipping species polygon ranges by lands.
 #' @param proj A character string specifying the projection of the coordinates
 #' @param alphaIncrement A numeric specifying the amount to increase alpha at each iteration
 #' @param alphaDecrement A numeric specifying the amount to decrease alpha if the function fails after the first iterations
@@ -34,7 +34,7 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
                              clipToCoast="terrestrial",
                              land_file = NULL,
                              proj='+proj=longlat +datum=WGS84',
-                             save.outputs = TRUE,
+                             save.outputs = FALSE,
                              do.parallel = FALSE,
                              ncores = NULL,
                              verbose = TRUE) {

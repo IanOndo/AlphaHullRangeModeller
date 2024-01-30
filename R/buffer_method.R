@@ -18,12 +18,12 @@ get_OneTenth_distmax <- function(x, default_buffer=200000){#, crs=sf::st_crs("+p
   y_lat 	<- grep(pattern = "[Ll][Aa][Tt]|^[Yy]$",x = names(x),value=TRUE)[1]
   longLatNames <- c(x_lon,y_lat)
   ll 		<- x[, longLatNames] #sp::SpatialPoints(x[, longLatNames], crs)
-
+  sf_points <- sf::st_as_sf(ll,coords=c(1,2),crs=4326)
   #-----------------------------------------------------
   #= 2. compute the 1/10th maximum inter-point distance
   #-----------------------------------------------------
   #dMat 		<- tryCatch(geosphere::distGeo(ll), error=function(err) return(geosphere::distGeo(ll@coords[1,],ll@coords[2,])))
-  dMat <- sf::st_distance(sf::st_as_sf(ll,coords=c(1,2),crs=4326))
+  dMat <- sf::st_distance(sf::st_transform(sf_points,crs="+proj=eqearth"))
   if(length(dMat)==0L) return(default_buffer)
   dMax 		<- max(dMat, na.rm = TRUE)[1]
   onetenth	<- units::drop_units(dMax / 10.)

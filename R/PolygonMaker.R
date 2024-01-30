@@ -67,7 +67,7 @@ PolygonMaker <- function(x, coordHeaders = NULL, fraction=0.95, partCount=10, bu
                   sf::st_transform(sf::st_as_sf(x[row,],
                                                 coords=c(1,2),
                                                 crs=4326),
-                                   crs="+proj=laea +nodefs"),
+                                   crs="+proj=eqearth"),
                   dist = buffer)}
                 )
               list.coords <- lapply(circ, function(buf){
@@ -125,8 +125,7 @@ PolygonMaker <- function(x, coordHeaders = NULL, fraction=0.95, partCount=10, bu
     # If another error is returned try making buffered points
     if(inherits(made.polygons, c("error","try-error"))) {
       made.polygons <- tryCatch({
-        #circ		<- dismo::circles(p = as(ll,"Spatial"), d = tail(other_buffers,1))
-        sf::st_buffer(sf::st_transform(ll,"+proj=laea +nodefs"),
+        sf::st_buffer(sf::st_transform(ll,"+proj=eqearth"),
                       dist = tail(other_buffers,1)) %>%
           sf::st_union() %>%
           sf::st_transform(4326) %>% list()
@@ -139,8 +138,7 @@ PolygonMaker <- function(x, coordHeaders = NULL, fraction=0.95, partCount=10, bu
   }
   else{ # If we have fewer points try making buffered points
     made.polygons <- tryCatch({
-      #circ		<- dismo::circles(p=as(ll,"Spatial"), d=other_buffers[length(other_buffers)])
-      sf::st_buffer(sf::st_transform(ll,"+proj=laea +nodefs"),
+      sf::st_buffer(sf::st_transform(ll,"+proj=eqearth"),
                     dist = tail(other_buffers,1)) %>%
         sf::st_union() %>%
         sf::st_transform(4326) %>% list()
