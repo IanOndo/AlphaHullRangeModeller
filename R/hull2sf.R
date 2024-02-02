@@ -41,7 +41,7 @@ arc2line <- function(center, r, vector, theta, npoints = 100) {
 
 # Function to convert alpha hulls into MULTILINESTRING object
 ahull2lines <- function(hull){
-  if (!inherits(x, "ahull")) {
+  if (!inherits(hull, "ahull")) {
     stop("x needs to be an ahull class object")
   }
   arclist <- hull$arcs
@@ -79,7 +79,10 @@ ahull2lines <- function(hull){
   }
 
   # Convert the list of lines to a MULTILINESTRING object
-  sf_lines <- sf::st_sfc(lines) %>% sf::st_cast("MULTILINESTRING")
+  sf_lines <- sf::st_sfc(lines) %>% 
+    sf::st_cast("MULTILINESTRING") %>%
+    sf::st_set_crs(4326)
+  
   return(sf_lines)
 }
 
@@ -98,7 +101,7 @@ ahull2lines <- function(hull){
 
 # Function to convert alpha hulls into POLYGON object
 ah2sf <- function(hull){
-  if (!inherits(x, "ahull")) {
+  if (!inherits(hull, "ahull")) {
     stop("x needs to be an ahull class object")
   }
   # convert to MULTILINESTRING first
@@ -106,7 +109,7 @@ ah2sf <- function(hull){
   
   # convert to POLYGON
   sf_poly <- sf_multilines[!sf::st_is_empty(sf_multilines)] %>% 
-    sf::cast("POLYGON")
+    sf::st_cast("POLYGON")
   
   return(sf_poly)
 }
