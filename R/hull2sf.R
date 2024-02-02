@@ -79,8 +79,8 @@ ahull2lines <- function(hull){
   }
 
   # Convert the list of lines to a MULTILINESTRING object
-  sf_lines <- sf::st_sfc(lines) %>% 
-    sf::st_cast("MULTILINESTRING") %>%
+  sf_lines <- sf::st_sfc(lines)  %>%
+    #sf::st_cast("MULTILINESTRING") %>%
     sf::st_set_crs(4326)
   
   return(sf_lines)
@@ -108,7 +108,10 @@ ah2sf <- function(hull){
   sf_multilines <- ahull2lines(hull)
   
   # convert to POLYGON
-  sf_poly <- sf_multilines[!sf::st_is_empty(sf_multilines)] %>% 
+  sf_poly <- sf_multilines[!sf::st_is_empty(sf_multilines)] %>%
+    sf::st_union() %>%
+    `[`(sf::st_is(.,"MULTILINESTRING")) %>%
+    sf::st_make_valid() %>%
     sf::st_cast("POLYGON")
   
   return(sf_poly)
