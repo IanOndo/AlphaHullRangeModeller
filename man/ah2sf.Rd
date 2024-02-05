@@ -4,16 +4,18 @@
 \alias{ah2sf}
 \title{Convert alpha hulls into sf POLYGON object}
 \usage{
-ah2sf(hull)
+ah2sf(x, increment = 360, rnd = 10, crs = 4326, tol = 1e-04)
 }
 \arguments{
-\item{hull}{Alpha hull}
+\item{x}{Alpha hull}
 }
 \value{
 a sf POLYGON object
 }
 \description{
-Convert alpha hulls into sf POLYGON object
+Function written by Andrew Bevan, found on R-sig-Geo, and modified by Pascal Title
+modified to support sf objects 17 Nov 2022
+added a fix to avoid error when casting from lines to polygons
 }
 \examples{
 library(alphahull)

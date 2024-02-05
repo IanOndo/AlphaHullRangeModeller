@@ -38,16 +38,6 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
                              do.parallel = FALSE,
                              ncores = NULL,
                              verbose = TRUE) {
-  #----------------------------------------
-  #= 0.Check packages
-  #----------------------------------------
-  # check if required packages are available
-  # pkgs.required = c("rgdal","raster","geosphere","parallel","doParallel","dismo","rangeBuilder","data.table")
-  # pkgs.available = sapply(pkgs.required, require, quietly = TRUE, character.only=TRUE)
-  # if(!any(pkgs.available)){
-  #   warning(paste('Packages',paste(pkgs.required[!pkgs.available],collapse=', '),'failed to load'))
-  #   stop("Try to re-install packages that failed to load")
-  # }
   if(verbose){
     message('#=================')
     message('#= 1. Check inputs')
@@ -270,6 +260,13 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
       # compute distance to meridians +/- 180°
       distTo180	<- geosphere::distGeo(p1 = species.data.cleaned[, c("long", "lat")],
                                       p2 = cbind(long = 180, lat = species.data.cleaned[, "lat"]))
+
+      # distTo180 <- sf::st_distance(sf::st_as_sf(species.data.cleaned[, c("long", "lat")], coords=1:2, crs=4326) %>%
+      #                                sf::st_transform("+proj=eqearth +wktext"),
+      #                               sf::st_as_sf(data.frame(long = 180, lat = species.data.cleaned[, "lat"]), coords=1:2, crs=4326) %>%
+      #                                sf::st_transform("+proj=eqearth +wktext"), by_element = TRUE) %>%
+      #   units::drop_units()
+      
       # compute the "1/10th max" buffer
       one_tenth 	<- get_OneTenth_distmax(species.data.cleaned, default_buffer)
       id.edges	<- which(distTo180 < one_tenth)
@@ -329,6 +326,7 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
                                              coastline = coastline,
                                              proj=proj,
                                              other_buffers = east.buff))
+          plot(species.polygons.east)
         }
 
         #bind polygons
@@ -354,7 +352,8 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
           # Assign species name to the polygon(s)
           species.polygons <- list(
             sf::st_sf(data.frame(species=rep(k, length(species.polygons)),
-                                                   geom=species.polygons))
+                                                   geom=species.polygons)) %>%
+              sf::st_union()
           )
           }
         
@@ -371,6 +370,7 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
                                          clipToCoast = clipToCoast,
                                          coastline=coastline,
                                          proj=proj))
+        print(species.polygons)
         species.polygons <- list(
           sf::st_sf(data.frame(species=rep(k, length(species.polygons)),
                                geom=sf::st_geometry(species.polygons)))
@@ -382,7 +382,6 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
 
       # Get potential error in coordinates
       cooErrs <- rangeBuilder::coordError(species.data.cleaned[, c("long", "lat")], nthreads = parallel::detectCores()-1)
-      #distErr <- max(cooErrs,na.rm=TRUE)
 
       #save polygons and points
       if(save.outputs){
@@ -423,8 +422,6 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
     finally ={
       ## Stop the cluster
       doParallel::stopImplicitCluster()
-      # pkg_to_detach <- paste("package",c("rangeBuilder"), sep=":")
-      # lapply(pkg_to_detach, detach, character.only = TRUE, unload = TRUE)
     })
 
     if(inherits(out,"error")){

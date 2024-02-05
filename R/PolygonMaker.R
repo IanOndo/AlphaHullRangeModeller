@@ -13,10 +13,10 @@
 #' @param proj A character string specifying the projection of the coordinates
 #' @param alphaIncrement A numeric specifying the amount to increase alpha at each iteration
 #' @param alphaDecrement A numeric specifying the amount to decrease alpha if the function fails after the first iterations
-#' @param maxIter A numeric integer specifying the maximum number of iterations before trying to build circular buffers.
+#' @param maxIter A numeric integer specifying the maximum number of iterations before trying to build circular buffers. Default is 2.
 #' @param other_buffers A numeric value or a vector of values of length \code{maxIter} specifying alternative buffer sizes (in meters) if the function fails after the first iterations.
 #' @export
-PolygonMaker <- function(x, coordHeaders = NULL, fraction=0.95, partCount=10, buffer, initialAlpha=2, alphaIncrement=1, alphaDecrement=1, maxIter=2, other_buffers=c(200000), clipToCoast="terrestrial", coastline=NULL, proj='+proj=longlat +datum=WGS84'){
+PolygonMaker <- function(x, coordHeaders = NULL, fraction=0.95, partCount=10, buffer, initialAlpha=2, alphaIncrement=1, alphaDecrement=1, maxIter=2, other_buffers=rep(200000, maxIter), clipToCoast="terrestrial", coastline=NULL, proj='+proj=longlat +datum=WGS84'){
 
   if(!inherits(x,"data.frame"))
     stop("Argument x must be a data.frame")
@@ -35,7 +35,7 @@ PolygonMaker <- function(x, coordHeaders = NULL, fraction=0.95, partCount=10, bu
   ll <- sf::st_as_sf(x, coords=c(1,2), crs=sf::st_crs(proj))
   
   # transform to lon/lat for getDynamicAlphaHull to run
-  is_lonlat <- !sf::st_is_longlat(ll)
+  is_lonlat <- sf::st_is_longlat(ll)
   if(!is_lonlat){
     x <- sf::st_transform(ll, crs=4326) %>%
       sf::st_coordinates() %>%
@@ -45,7 +45,7 @@ PolygonMaker <- function(x, coordHeaders = NULL, fraction=0.95, partCount=10, bu
   # Do we have at least 3 points?
   if (length(sf::st_geometry(ll)) >= 3){
     # Try making polygons
-    made.polygons <- tryCatch(rangeBuilder::getDynamicAlphaHull(
+    made.polygons <- tryCatch(AlphaHullRangeModeller::getDynamicAlphaHull(
           x,
           coordHeaders = coordHeaders,
           fraction = fraction,
@@ -59,27 +59,29 @@ PolygonMaker <- function(x, coordHeaders = NULL, fraction=0.95, partCount=10, bu
           # if we have 3 collinear points
           if(length(sf::st_geometry(ll)) == 3){
             iter = 0
-            process = TRUE
-            while(iter< maxIter*5 & process){
+            while(iter<maxIter){
               # sample non-collinear new coordinates within the buffer #dismo::circles
-              circ		<- lapply(c(nrow(x)-1,nrow(x)), function(row){
-                sf::st_buffer(
-                  sf::st_transform(sf::st_as_sf(x[row,],
-                                                coords=c(1,2),
-                                                crs=4326),
-                                   crs="+proj=eqearth"),
-                  dist = buffer)}
-                )
-              list.coords <- lapply(circ, function(buf){
-                as.vector(
-                  sf::st_coordinates(sf::st_sample(buf, size=1, type="random"))
-                  )
-                })
-              x.new   <- rbind(x[-c(nrow(x)-1,nrow(x)),], setNames(data.frame(do.call(rbind, list.coords)), colnames(x)))
+              # circ		<- lapply(c(nrow(x)-1,nrow(x)), function(row){
+              #   sf::st_buffer(
+              #     sf::st_transform(sf::st_as_sf(x[row,],
+              #                                   coords=c(1,2),
+              #                                   crs=4326),
+              #                      crs="+proj=eqearth"),
+              #     dist = buffer)}
+              #   )
+              # list.coords <- lapply(circ, function(buf){
+              #   as.vector(
+              #     sf::st_coordinates(sf::st_sample(buf, size=1, type="random"))
+              #     )
+              #   })
+              # x.new   <- rbind(x[-c(nrow(x)-1,nrow(x)),], setNames(data.frame(do.call(rbind, list.coords)), colnames(x)))
+              x.new <- sf::jitter(x) %>%
+                sf::st_coordinates() %>%
+                as.data.frame()
               
-              made.polygons <- try(rangeBuilder::getDynamicAlphaHull(
+              made.polygons <- try(AlphaHullRangeModeller::getDynamicAlphaHull(
                 x.new,
-                coordHeaders = coordHeaders,
+                coordHeaders = c("x","y"),#coordHeaders,
                 fraction = fraction,
                 partCount = partCount,
                 buff = buffer,
@@ -88,7 +90,7 @@ PolygonMaker <- function(x, coordHeaders = NULL, fraction=0.95, partCount=10, bu
                 clipToCoast = "no"
               ),silent=TRUE)
               
-              process = inherits(made.polygons, "try-error")
+              if(!inherits(made.polygons, "try-error")) break
               iter = iter + 1
             }
             return(made.polygons)
@@ -104,7 +106,7 @@ PolygonMaker <- function(x, coordHeaders = NULL, fraction=0.95, partCount=10, bu
     while(inherits(made.polygons,c("error","try-error")) && lowerAlpha!=0 && iter < maxIter){
       # Try making polygons with lower initial alpha value and other buffer radius
       made.polygons <- tryCatch({
-        made.polygons <-rangeBuilder::getDynamicAlphaHull(
+        made.polygons <-AlphaHullRangeModeller::getDynamicAlphaHull(
           x,
           coordHeaders = coordHeaders,
           fraction = fraction,
@@ -121,11 +123,12 @@ PolygonMaker <- function(x, coordHeaders = NULL, fraction=0.95, partCount=10, bu
       lowerAlpha = max(lowerAlpha-alphaDecrement,0)
       iter = iter + 1
     }
-    
+
     # If another error is returned try making buffered points
     if(inherits(made.polygons, c("error","try-error"))) {
+      print(made.polygons[[1]])
       made.polygons <- tryCatch({
-        sf::st_buffer(sf::st_transform(ll,"+proj=eqearth"),
+        sf::st_buffer(sf::st_transform(ll,"+proj=eqearth +wktext"),
                       dist = tail(other_buffers,1)) %>%
           sf::st_union() %>%
           sf::st_transform(4326) %>% list()
@@ -138,12 +141,12 @@ PolygonMaker <- function(x, coordHeaders = NULL, fraction=0.95, partCount=10, bu
   }
   else{ # If we have fewer points try making buffered points
     made.polygons <- tryCatch({
-      sf::st_buffer(sf::st_transform(ll,"+proj=eqearth"),
+      sf::st_buffer(sf::st_transform(ll,"+proj=eqearth +wktext"),
                     dist = tail(other_buffers,1)) %>%
         sf::st_union() %>%
         sf::st_transform(4326) %>% list()
     },
-    error=function(err){ # If this fails return NA
+    error=function(err){# If this fails return NA
       return(list(NA))
     })
   }

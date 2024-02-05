@@ -22,13 +22,13 @@ get_OneTenth_distmax <- function(x, default_buffer=200000){#, crs=sf::st_crs("+p
   #-----------------------------------------------------
   #= 2. compute the 1/10th maximum inter-point distance
   #-----------------------------------------------------
-  #dMat 		<- tryCatch(geosphere::distGeo(ll), error=function(err) return(geosphere::distGeo(ll@coords[1,],ll@coords[2,])))
-  dMat <- sf::st_distance(sf::st_transform(sf_points,crs="+proj=eqearth"))
+  dMat 		<- tryCatch(geosphere::distGeo(ll), error=function(err) return(geosphere::distGeo(ll@coords[1,],ll@coords[2,])))
+  # dMat <- sf::st_distance(sf::st_transform(sf_points,crs="+proj=eqearth")) %>%
+  #   units::drop_units()
   if(length(dMat)==0L) return(default_buffer)
   dMax 		<- max(dMat, na.rm = TRUE)[1]
-  onetenth	<- units::drop_units(dMax / 10.)
+  onetenth	<- dMax / 10.#units::drop_units(dMax / 10.)
   if(onetenth==0){
-
     onetenth=default_buffer
   }
   return(onetenth)

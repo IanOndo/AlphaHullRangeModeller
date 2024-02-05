@@ -16,7 +16,6 @@ RoxygenNote: 7.2.3
 Imports: 
     rangeBuilder,
     geosphere,
-    doParallel,
     data.table
 Depends:
     doParallel
