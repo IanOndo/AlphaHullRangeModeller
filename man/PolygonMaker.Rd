@@ -14,7 +14,7 @@ PolygonMaker(
   alphaIncrement = 1,
   alphaDecrement = 1,
   maxIter = 2,
-  other_buffers = c(2e+05),
+  other_buffers = rep(2e+05, maxIter),
   clipToCoast = "terrestrial",
   coastline = NULL,
   proj = "+proj=longlat +datum=WGS84"
@@ -37,7 +37,7 @@ PolygonMaker(
 
 \item{alphaDecrement}{A numeric specifying the amount to decrease alpha if the function fails after the first iterations}
 
-\item{maxIter}{A numeric integer specifying the maximum number of iterations before trying to build circular buffers.}
+\item{maxIter}{A numeric integer specifying the maximum number of iterations before trying to build circular buffers. Default is 2.}
 
 \item{other_buffers}{A numeric value or a vector of values of length \code{maxIter} specifying alternative buffer sizes (in meters) if the function fails after the first iterations.}
 
