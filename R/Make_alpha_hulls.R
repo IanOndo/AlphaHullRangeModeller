@@ -326,7 +326,6 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
                                              coastline = coastline,
                                              proj=proj,
                                              other_buffers = east.buff))
-          plot(species.polygons.east)
         }
 
         #bind polygons
@@ -370,7 +369,6 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
                                          clipToCoast = clipToCoast,
                                          coastline=coastline,
                                          proj=proj))
-        print(species.polygons)
         species.polygons <- list(
           sf::st_sf(data.frame(species=rep(k, length(species.polygons)),
                                geom=sf::st_geometry(species.polygons)))
