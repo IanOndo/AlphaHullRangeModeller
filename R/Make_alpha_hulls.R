@@ -36,7 +36,7 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
                              proj='+proj=longlat +datum=WGS84',
                              save.outputs = FALSE,
                              do.parallel = FALSE,
-                             ncores = NULL,
+                             ncores = 1,
                              verbose = TRUE) {
   if(verbose){
     message('#=================')
@@ -148,10 +148,7 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
     stop("Parameter 'initialAlpha' must be > 0")
   if(alphaIncrement<=0)
     stop("Parameter 'alphaIncrement' must be > 0")
-  # if(!is.null(coastline)){
-  #   if(inherits(coastline,c("sf","SpatialPolygonsDataFrame")))
-  #     clipToCoast	= "no"
-  # }
+
   if(verbose & do.parallel){
     message('#============================')
     message('#= 3. Set parallel processing')
@@ -167,15 +164,16 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
     }
 
     if(is.null(ncores))
-      ncores = parallel::detectCores()-1 # number of cores to use
+      ncores = min(6,parallel::detectCores()-1) # number of cores to use
     else
       ncores = min(ncores,parallel::detectCores())
-
     doParallel::registerDoParallel(ncores)
+    `%execute%` <- foreach::`%dopar%`
   }else{
     toExport <- NULL
     # Sequential processing
     foreach::registerDoSEQ()
+    `%execute%` <- foreach::`%do%`
   }
 
   if(verbose){
@@ -187,8 +185,8 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
   # Time starts
   started.at <- Sys.time()
   list.species.polygons <- foreach::foreach(k = list.species,
-                                            .packages = c("rangeBuilder", "data.table", "AlphaHullRangeModeller","sf"),
-                                            .export=toExport) %dopar% {
+                                            .packages = c("AlphaHullRangeModeller","sf"),
+                                            .export=toExport) %execute% {
 
     out = tryCatch({
 
@@ -379,7 +377,8 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
       species.polygons$to_remove	<- 	which(Rows_to_remove)
 
       # Get potential error in coordinates
-      cooErrs <- rangeBuilder::coordError(species.data.cleaned[, c("long", "lat")], nthreads = parallel::detectCores()-1)
+      # cooErrs <- rangeBuilder::coordError(species.data.cleaned[, c("long", "lat")],
+      #                                     nthreads = 1)
 
       #save polygons and points
       if(save.outputs){
