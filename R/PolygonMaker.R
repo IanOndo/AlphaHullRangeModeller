@@ -16,7 +16,19 @@
 #' @param maxIter A numeric integer specifying the maximum number of iterations before trying to build circular buffers. Default is 2.
 #' @param other_buffers A numeric value or a vector of values of length \code{maxIter} specifying alternative buffer sizes (in meters) if the function fails after the first iterations.
 #' @export
-PolygonMaker <- function(x, coordHeaders = NULL, fraction=0.95, partCount=10, buffer, initialAlpha=2, alphaIncrement=1, alphaDecrement=1, maxIter=2, other_buffers=rep(200000, maxIter), clipToCoast="terrestrial", coastline=NULL, proj='+proj=longlat +datum=WGS84'){
+PolygonMaker <- function(x,
+                         coordHeaders = NULL,
+                         fraction=0.95,
+                         partCount=10,
+                         buffer,
+                         initialAlpha=2,
+                         alphaIncrement=1,
+                         alphaDecrement=1,
+                         maxIter=2,
+                         other_buffers=rep(200000, maxIter),
+                         clipToCoast="terrestrial",
+                         coastline=NULL,
+                         proj='+proj=longlat +datum=WGS84'){
 
   if(!inherits(x,"data.frame"))
     stop("Argument x must be a data.frame")
