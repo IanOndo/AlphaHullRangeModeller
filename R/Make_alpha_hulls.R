@@ -368,7 +368,7 @@ make_alpha_hulls <- function(loc_data, output_dir=NULL,
                                          coastline=coastline,
                                          proj=proj))
         species.polygons <- list(
-          sf::st_sf(data.frame(species=rep(k, length(species.polygons)),
+          sf::st_sf(data.frame(species=rep(k, sf::st_geometry(species.polygons) |> length()),
                                geom=sf::st_geometry(species.polygons)))
         )
       }
