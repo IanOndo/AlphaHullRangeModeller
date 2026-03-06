@@ -63,6 +63,7 @@ min.col <- function(m, ...) max.col(-m,...)
 #'         \code{Data} A two-column matrix or data.frame or data.table with longitude and latitude coordinates and a column 'assigned' specifying
 #'         which of the k cluster each point belongs to.
 #'         \code{Centers} A two-column data.frame with longitude and latitude coordinates of the cluster centers.
+#' @export
 kmeansEqual <- function(kdat, k = 3, iter_max = 30, tolerance.iter=1e-08, random.seed=1234, method=c("iqr.outliers","top.outliers","utmzone.outliers"), nstart=20, n.outliers=10, verbose=TRUE, plot=TRUE){
   
   if(verbose){
@@ -71,17 +72,17 @@ kmeansEqual <- function(kdat, k = 3, iter_max = 30, tolerance.iter=1e-08, random
     cat('#---------------------------------------------------------------------------\n')
   }
   
-  if(!any(inherits(kdat, c("matrix","data.frame","data.table"))))
+  if(missing(kdat)) stop("kdat is missing with no value by default.")
+  
+  if(!inherits(kdat, c("matrix","data.frame","data.table")))
     stop("Argument kdat must be a matrix, a data.frame or a data.table")
-  if(nrow(kdat) < 2)
-    stop("Input data must have at least 2 coordinates.")
+  # if(ncol(kdat) != 2)
+  #   stop("Input data must have 2 columns of geographic coordinates.")
   
   if(!is.numeric(k))
     stop("Argument 'k' must be numeric.")
-  if(k<0)
-    stop("The number of cluster must be > 0.")
   if(k<2)
-    warning("The number of group requested is < 2.")
+    stop("The number of group requested is < 2.")
   
   if(!is.numeric(iter_max))
     stop("Argument 'iter_max' must be numeric")
@@ -96,7 +97,22 @@ kmeansEqual <- function(kdat, k = 3, iter_max = 30, tolerance.iter=1e-08, random
   
   set.seed(random.seed)
   
+  if(is.matrix(kdat))
+    kdat %<>%
+    as.data.frame(row.names=NULL)
+  
+  do_rename = !all(c("lon","lat") %in% colnames(kdat))
+  # retrieve coordinates if needed
+  if(do_rename){
+    id_x_lon 	<- grep(pattern = "[Ll][Oo][Nn]|^[Xx]$",x = names(kdat), value=TRUE)[1]
+    id_y_lat 	<- grep(pattern = "[Ll][Aa][Tt]|^[Yy]$",x = names(kdat), value=TRUE)[1]
+    coordHeaders <- c(id_x_lon, id_y_lat)
+    kdat %<>%
+      dplyr::rename(lon = coordHeaders[1], lat = coordHeaders[2])
+  }
+  
   kclust <- kdat %>%
+    dplyr::select(lon,lat) %>%
     stats::kmeans(k, nstart = nstart)
   
   # initial clusters
@@ -109,18 +125,6 @@ kmeansEqual <- function(kdat, k = 3, iter_max = 30, tolerance.iter=1e-08, random
     sf::st_transform(crs=sf::st_crs("+proj=eqearth")) %>%
     sf::st_coordinates()
   
-  if(is.matrix(kdat))
-    kdat %<>%
-    as.data.frame(row.names=NULL)
-  
-  # retrieve coordinates if needed
-  if(!all(c("lon","lat") %in% colnames(kdat))){
-    id_x_lon 	<- grep(pattern = "[Ll][Oo][Nn]|[Xx]",x = names(kdat))[1]
-    id_y_lat 	<- grep(pattern = "[Ll][Aa][Tt]|[Yy]",x = names(kdat))[1]
-    coordHeaders <- c(id_x_lon, id_y_lat)
-    kdat %<>%
-      dplyr::rename(lon = coordHeaders[1], lat = coordHeaders[2])
-  }
   
   if(verbose){
     cat('#---------------------------------------------------------------------------\n')
@@ -139,8 +143,19 @@ kmeansEqual <- function(kdat, k = 3, iter_max = 30, tolerance.iter=1e-08, random
       dplyr::select(lon,lat) %>%
       sf::st_as_sf(coords=1:2, crs=sf::st_crs(4326)) %>%
       sf::st_transform(crs=sf::st_crs("+proj=eqearth")) %>%
-      sf::st_coordinates() %>%
-      stats::kmeans(centers)
+      sf::st_coordinates() %>% {
+        \(x) try(stats::kmeans(x, centers),silent=T)
+      }() |>
+      {
+        \(x) if(inherits(x,"try-error")){
+          kdat %>%
+            dplyr::select(lon,lat) %>%
+            sf::st_as_sf(coords=1:2, crs=sf::st_crs(4326)) %>%
+            sf::st_transform(crs=sf::st_crs("+proj=eqearth")) %>%
+            sf::st_coordinates() %>%
+            stats::kmeans(k, nstart=nstart)
+        }else x
+      }()
     
     kdat$assigned = kclust$cluster
     #---------------------------------------------------------------------------
@@ -251,8 +266,9 @@ kmeansEqual <- function(kdat, k = 3, iter_max = 30, tolerance.iter=1e-08, random
       }
     }
     
+    method = match.arg(method)
     # assign the outliers from each group to the closest cluster center
-    switch(method[1],
+    switch(method,
            
            "top.outliers" = {
              j = 1
@@ -342,7 +358,8 @@ kmeansEqual <- function(kdat, k = 3, iter_max = 30, tolerance.iter=1e-08, random
     
     # keep assigments lon, lat and assigments only
     kdat <- kdat %>%
-      dplyr::select(lon, lat, assigned)
+      dplyr::select(-dplyr::contains("kdist"),-dplyr::starts_with("is.outliers"))
+    #dplyr::select(lon, lat, assigned)
     
     if(plot){
       cent <- centers %>%
@@ -375,6 +392,10 @@ kmeansEqual <- function(kdat, k = 3, iter_max = 30, tolerance.iter=1e-08, random
     sf::st_transform(crs=sf::st_crs(4326)) %>%
     sf::st_coordinates()
   
+  if(do_rename){
+    kdat %<>%
+      dplyr::rename(!!coordHeaders[1]:='lon', !!coordHeaders[2]:='lat')
+  }
+  
   return(list(Data=kdat, Centers=centers, converged=!process))
 }
-
