@@ -1,6 +1,6 @@
 Package: AlphaHullRangeModeller
 Title: Alpha-hulls range polygons for estimating species distribution
-Version: 0.0.0.9000
+Version: 1.0.0.
 Authors@R: 
     person(given = "Ian",
            family = "Ondo",
@@ -13,12 +13,17 @@ Encoding: UTF-8
 LazyData: true
 ByteCompile: true
 RoxygenNote: 7.2.3
-Imports: 
+Imports:
+    RcppAlphahull,
     rangeBuilder,
     geosphere,
     data.table,
-    dplyr
+    dplyr,
+    Rcpp
 Depends:
     doParallel
+Remotes: federicoairoldi/ProgettoPACS
 Suggests:
     RGeodata
+LinkingTo: 
+    Rcpp
