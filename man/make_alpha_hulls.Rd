@@ -2,7 +2,9 @@
 % Please edit documentation in R/Make_alpha_hulls.R
 \name{make_alpha_hulls}
 \alias{make_alpha_hulls}
-\title{Estimating the species distribution range with alpha-hulls}
+\alias{make_rcpp_alpha_hulls}
+\alias{make_fast_alpha_hulls}
+\title{Generate alpha-hull range polygons from occurrence records}
 \usage{
 make_alpha_hulls(
   loc_data,
@@ -15,6 +17,7 @@ make_alpha_hulls(
   alphaIncrement = 1,
   alphaDecrement = 1,
   maxIter = 2,
+  buffer_method = c("one_tenth", "user_defined"),
   default_buffer = 2e+05,
   other_buffers = c(2e+05),
   tolerance = 5,
@@ -23,44 +26,184 @@ make_alpha_hulls(
   proj = "+proj=longlat +datum=WGS84",
   save.outputs = FALSE,
   do.parallel = FALSE,
-  ncores = NULL,
+  ncores = 1,
+  verbose = TRUE
+)
+
+make_rcpp_alpha_hulls(
+  loc_data,
+  output_dir = NULL,
+  binom_col = NULL,
+  coordHeaders = NULL,
+  fraction = 0.95,
+  partCount = 10,
+  initialAlpha = 2,
+  alphaIncrement = 1,
+  alphaDecrement = 1,
+  maxIter = 2,
+  buffer_method = c("one_tenth", "user_defined"),
+  default_buffer = 2e+05,
+  other_buffers = c(2e+05),
+  tolerance = 5,
+  clipToCoast = "terrestrial",
+  land_file = NULL,
+  proj = "+proj=longlat +datum=WGS84",
+  save.outputs = FALSE,
+  do.parallel = FALSE,
+  ncores = 1,
+  verbose = TRUE
+)
+
+make_fast_alpha_hulls(
+  loc_data,
+  output_dir = NULL,
+  binom_col = NULL,
+  coordHeaders = NULL,
+  fraction = 0.95,
+  partCount = 10,
+  initialAlpha = 2,
+  alphaIncrement = 1,
+  alphaDecrement = 1,
+  maxIter = 2,
+  buffer_method = c("one_tenth", "user_defined"),
+  default_buffer = 2e+05,
+  other_buffers = c(2e+05),
+  tolerance = 5,
+  clipToCoast = "terrestrial",
+  land_file = NULL,
+  proj = "+proj=longlat +datum=WGS84",
+  save.outputs = FALSE,
+  do.parallel = FALSE,
+  ncores = 1,
   verbose = TRUE
 )
 }
 \arguments{
-\item{loc_data}{A two-column matrix or data.frame or data.table or a character string specifying the path to your occurrence files directory (i.e. where species occurrence data files are stored) OR path to your species occurrence file (must be a csv file)}
+\item{loc_data}{Input occurrence data. Can be:
+\itemize{
+  \item a CSV file path,
+  \item a directory containing species CSV files,
+  \item a \code{data.frame}, or
+  \item a matrix containing coordinates.
+}}
 
-\item{output_dir}{An optional character string specifying the path to the directory where to save the shapefiles generated.}
+\item{output_dir}{Character string. Directory where outputs should be saved.}
 
-\item{binom_col}{A numeric value indicating which column number contains the binomials for the species (i.e. Genus species).Ignored if loc_data is not a csv file.}
+\item{binom_col}{Integer. Column index containing species names.
+If \code{NULL}, all records are treated as a single species.}
 
-\item{coordHeaders}{A character string vector of length 2 specifying the names of the columns indicating the longitude and latitude respectively.}
+\item{coordHeaders}{Optional coordinate column names.}
 
-\item{fraction}{A numeric between 0 and 1 specifying the minimum fraction of occurrences that must be included in the polygon.}
+\item{fraction}{Numeric. Fraction of occurrence points retained in polygon
+construction. Must be > 0 and <= 1.}
 
-\item{partCount}{A numeric integer specifying the maximum number of disjunct polygons that are allowed.}
+\item{partCount}{Integer. Minimum number of occurrence points per polygon
+partition.}
 
-\item{initialAlpha}{A numeric specifying the starting value for the parameter alpha.}
+\item{initialAlpha}{Numeric. Initial alpha value used for alpha-hull generation.}
 
-\item{alphaIncrement}{A numeric specifying the amount to increase alpha at each iteration}
+\item{alphaIncrement}{Numeric. Increment applied when adjusting alpha values.}
 
-\item{alphaDecrement}{A numeric specifying the amount to decrease alpha if the function fails after the first iterations}
+\item{alphaDecrement}{Numeric. Decrement applied when adjusting alpha values.}
 
-\item{maxIter}{A numeric integer specifying the maximum number of iterations before trying to build circular buffers.}
+\item{maxIter}{Integer. Maximum number of optimisation iterations.}
 
-\item{default_buffer}{A numeric specifying the buffering distance in meters around each point in case the buffer method equals 0. Default is 200 km.}
+\item{buffer_method}{Character string specifying how polygon buffers are
+determined. One of:
+\itemize{
+  \item \code{"one_tenth"}: one tenth of the maximum inter-point distance
+  \item \code{"user_defined"}: fixed user-defined buffer
+}}
 
-\item{other_buffers}{A numeric value or a vector of values of length \code{maxIter} specifying alternative buffer sizes (in meters) if the function fails after the first iterations.}
+\item{default_buffer}{Numeric. Default buffer distance (in metres).}
 
-\item{clipToCoast}{A logical. Should the terrestrial \code{clipToCoast='terrestrial'}, the aquatic part \code{clipToCoast='aquatic'} or none part \code{clipToCoast='no'} part of the range be kept ?}
+\item{other_buffers}{Numeric vector of additional buffer distances.}
 
-\item{land_file}{An optional sf object or character string specifying a path to a land basemap (shapefile or rds file) for clipping species polygon ranges by lands.}
+\item{tolerance}{Numeric. Coordinate rounding precision used for duplicate
+removal.}
 
-\item{proj}{A character string specifying the projection of the coordinates}
+\item{clipToCoast}{Character string controlling clipping behaviour relative
+to coastlines.}
+
+\item{land_file}{Optional coastline polygon source. Can be:
+\itemize{
+  \item a shapefile path,
+  \item an \code{RDS} file,
+  \item or an \code{sf} object.
+}}
+
+\item{proj}{Character string defining the coordinate reference system.}
+
+\item{save.outputs}{Logical. If \code{TRUE}, polygons and occurrence points
+are written to disk as ESRI shapefiles.}
+
+\item{do.parallel}{Logical. If \code{TRUE}, species are processed in parallel.}
+
+\item{ncores}{Integer. Number of cores used for parallel processing.}
+
+\item{verbose}{Logical. If \code{TRUE}, progress messages are displayed.}
 }
 \value{
-None
+If a single species is processed, returns a single \code{sf} polygon object.
+Otherwise returns a list of species polygon objects.
+
+Each polygon object may contain:
+\itemize{
+  \item polygon geometries,
+  \item cleaned occurrence points,
+  \item indices of removed records.
+}
 }
 \description{
-Make an alpha-hull from the spatial distribution of species occurrence records
+Builds species distribution polygons using alpha-hull geometry derived from
+geographic occurrence coordinates. The function supports single-species or
+multi-species workflows from files, directories, matrices, or data frames,
+and can optionally clip polygons to coastlines and export spatial outputs.
+
+Alpha hulls are generated using iterative alpha-shape optimisation, 
+with optional handling of species distributions crossing the \eqn{\pm180^\circ} meridian.
+}
+\details{
+The function performs the following workflow:
+\enumerate{
+  \item Validates and imports occurrence data
+  \item Detects species and coordinate columns
+  \item Removes duplicate and incomplete coordinates
+  \item Computes adaptive buffers for alpha-hull construction
+  \item Generates alpha-hull polygons using
+    \code{AlphaHullRangeModeller::PolygonMaker()}
+  \item Handles distributions crossing the dateline
+    (\eqn{\pm180^\circ} longitude)
+  \item Optionally clips polygons to terrestrial coastlines
+  \item Optionally exports polygons and occurrence points as shapefiles
+}
+
+By default, coastlines are obtained from Natural Earth data distributed with
+\pkg{rangeBuilder}.
+
+Returned polygons are stored as \code{sf} objects.
+}
+\examples{
+\dontrun{
+# Build alpha hulls from a CSV file
+polys <- make_alpha_hulls(
+  loc_data = "occurrences.csv",
+  binom_col = 1
+)
+
+# Build polygons from a data.frame
+polys <- make_alpha_hulls(
+  loc_data = occ_data,
+  binom_col = 1,
+  do.parallel = TRUE,
+  ncores = 4
+)
+
+# Save outputs to disk
+polys <- make_alpha_hulls(
+  loc_data = occ_data,
+  output_dir = "outputs/",
+  save.outputs = TRUE
+)
+}
 }

@@ -2,7 +2,9 @@
 % Please edit documentation in R/PolygonMaker.R
 \name{PolygonMaker}
 \alias{PolygonMaker}
-\title{Generate an alpha-hull determine by the spatial distribution of points.}
+\alias{PolygonMakerRcpp}
+\alias{FastPolygonMaker}
+\title{Generate species range polygons using adaptive alpha-hull methods}
 \usage{
 PolygonMaker(
   x,
@@ -19,32 +21,166 @@ PolygonMaker(
   coastline = NULL,
   proj = "+proj=longlat +datum=WGS84"
 )
+
+PolygonMakerRcpp(
+  x,
+  coordHeaders = NULL,
+  fraction = 0.95,
+  partCount = 10,
+  buffer,
+  initialAlpha = 2,
+  alphaIncrement = 1,
+  alphaDecrement = 1,
+  maxIter = 2,
+  other_buffers = rep(2e+05, maxIter),
+  clipToCoast = "terrestrial",
+  coastline = NULL,
+  proj = "+proj=longlat +datum=WGS84"
+)
+
+FastPolygonMaker(
+  x,
+  coordHeaders = NULL,
+  fraction = 0.95,
+  partCount = 10,
+  buffer,
+  initialAlpha = 2,
+  alphaIncrement = 1,
+  alphaDecrement = 1,
+  maxIter = 2,
+  other_buffers = rep(2e+05, maxIter),
+  clipToCoast = "terrestrial",
+  coastline = NULL,
+  proj = "+proj=longlat +datum=WGS84",
+  tiles = NULL
+)
 }
 \arguments{
-\item{x}{A two-column data.frame of occurrence records coordinates of the species.}
+\item{x}{A two-column \code{data.frame} containing occurrence coordinates.}
 
-\item{coordHeaders}{A character string vector of length 2 specifying the names of the columns indicating the longitude and latitude respectively.}
+\item{coordHeaders}{Optional character vector of length 2 specifying the
+longitude and latitude column names.}
 
-\item{fraction}{A numeric between 0 and 1 specifying the minimum fraction of occurrences that must be included in the polygon.}
+\item{fraction}{Numeric value between 0 and 1 specifying the minimum
+fraction of occurrence points that must be enclosed within the polygon.}
 
-\item{partCount}{A numeric integer specifying the maximum number of disjunct polygons that are allowed.}
+\item{partCount}{Integer specifying the maximum number of disjunct polygon
+components allowed.}
 
-\item{buffer}{A numeric specifying the buffering distance in meters around each point.}
+\item{buffer}{Numeric buffering distance (in metres) applied around points.}
 
-\item{initialAlpha}{A numeric specifying the starting value for the parameter alpha.}
+\item{initialAlpha}{Numeric initial alpha value used during alpha-hull
+construction.}
 
-\item{alphaIncrement}{A numeric specifying the amount to increase alpha at each iteration}
+\item{alphaIncrement}{Numeric increment applied to alpha during iterative
+optimisation.}
 
-\item{alphaDecrement}{A numeric specifying the amount to decrease alpha if the function fails after the first iterations}
+\item{alphaDecrement}{Numeric decrement applied to alpha when polygon
+generation fails.}
 
-\item{maxIter}{A numeric integer specifying the maximum number of iterations before trying to build circular buffers. Default is 2.}
+\item{maxIter}{Integer specifying the maximum number of retry attempts.}
 
-\item{other_buffers}{A numeric value or a vector of values of length \code{maxIter} specifying alternative buffer sizes (in meters) if the function fails after the first iterations.}
+\item{other_buffers}{Numeric vector of alternative buffer distances (in
+metres) used during fallback attempts.}
 
-\item{clipToCoast}{A logical. Should the terrestrial \code{clipToCoast='terrestrial'}, the aquatic part \code{clipToCoast='aquatic'} or none part \code{clipToCoast='no'} part of the range be kept ?}
+\item{clipToCoast}{Character string specifying coastline clipping mode:
+\itemize{
+  \item \code{"terrestrial"}: retain terrestrial portion only
+  \item \code{"aquatic"}: retain aquatic portion only
+  \item \code{"no"}: disable coastline clipping
+}}
 
-\item{proj}{A character string specifying the projection of the coordinates}
+\item{coastline}{Optional coastline polygons provided as \code{sf} or
+\code{sfc} objects.}
+
+\item{proj}{Character string specifying the coordinate reference system.}
+
+\item{tiles}{Optional \code{sf} tiling grid used by
+\code{FastPolygonMaker()} to accelerate coastline intersection operations.}
+}
+\value{
+An \code{sf} polygon geometry representing the estimated species
+  range. Returns \code{NA} if polygon construction fails.
 }
 \description{
-Make alpha-hulls from a set of coordinates. PolygonMaker will try maxIter times to create an alpha hull with alpha = initialAlpha, and will then increase alpha by alphaIncrement
+Constructs species range polygons from geographic occurrence coordinates
+using adaptive alpha-hull algorithms. The functions iteratively adjust alpha
+parameters to generate polygons satisfying user-defined completeness and
+fragmentation constraints, with multiple fallback strategies when alpha-hull
+construction fails.
+
+Three implementations are provided:
+\itemize{
+  \item \code{PolygonMaker}: standard R implementation
+  \item \code{PolygonMakerRcpp}: Rcpp-accelerated implementation
+  \item \code{FastPolygonMaker}: optimized implementation with accelerated
+    coastline clipping using spatial tiling
+}
+
+If alpha-hull construction fails, the functions progressively:
+\enumerate{
+  \item decrease alpha values,
+  \item modify buffer sizes,
+  \item and finally fall back to buffered occurrence polygons.
+}
+
+Special handling is implemented for collinear points and small occurrence
+datasets.
+}
+\details{
+These functions are designed for automated species range reconstruction from
+occurrence records, particularly for biodiversity and conservation
+applications.
+
+Polygon generation relies on iterative adaptive alpha-hull construction
+implemented in:
+\itemize{
+  \item \code{getDynamicAlphaHull()}
+  \item \code{getDynamicRcppAlphaHull()}
+  \item \code{getDynamicFastAlphaHull()}
+}
+
+The workflow:
+\enumerate{
+  \item Detects coordinate columns
+  \item Converts coordinates to \code{sf} geometries
+  \item Attempts alpha-hull construction
+  \item Iteratively adjusts alpha and buffer parameters if needed
+  \item Falls back to buffered occurrence polygons when necessary
+  \item Optionally clips polygons to coastlines
+  \item Returns valid \code{sf} geometries
+}
+
+The \code{FastPolygonMaker()} implementation improves clipping performance
+by spatially partitioning coastlines into tiles prior to intersection,
+substantially reducing geometric filtering costs for large global datasets.
+}
+\examples{
+\dontrun{
+# Standard implementation
+poly <- PolygonMaker(
+  x = occ_data,
+  buffer = 200000
+)
+
+# Rcpp implementation
+poly <- PolygonMakerRcpp(
+  x = occ_data,
+  buffer = 200000
+)
+
+# Fast implementation with coastline clipping
+poly <- FastPolygonMaker(
+  x = occ_data,
+  buffer = 200000,
+  clipToCoast = "terrestrial",
+  coastline = world_coast
+)
+}
+}
+\references{
+Rivers, M. C., Bachman, S. P., Meagher, T. R., Nic Lughadha, E. M.,
+& Brummitt, N. A. (2010). Subpopulations, locations and fragmentation:
+Applying IUCN Red List criteria to herbarium specimen data.
+\emph{Biodiversity and Conservation}, 19, 2071--2085.
 }
