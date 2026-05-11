@@ -25,7 +25,7 @@ Install *AlphaHullRangeModeller* with the following instructions:
 
 ``` r
 devtools::install_github("IanOndo/AlphaHullRangeModeller") # for the main branch
-devtools::install_github("IanOndo/AlphaHullRangeModeller", ref="devel") # for the development branch
+devtools::install_github("IanOndo/AlphaHullRangeModeller", ref="devel") # for the development version
 
 library(AlphaHullRangeModeller)
 ```
