@@ -86,6 +86,80 @@ ahull2lines <- function(hull){
   return(sf_lines)
 }
 
+fill_arc_endpoints <- function(x, tol = 1e-8, rnd = 10) {
+  if (!inherits(x, "ahull")) {
+    stop("x must be an 'ahull' object")
+  }
+  
+  arcs <- as.data.frame(x$arcs)
+  
+  # support both naming conventions
+  vx_name <- if ("v.x" %in% names(arcs)) "v.x" else if ("vx" %in% names(arcs)) "vx" else stop("Missing vx/v.x")
+  vy_name <- if ("v.y" %in% names(arcs)) "v.y" else if ("vy" %in% names(arcs)) "vy" else stop("Missing vy/v.y")
+  
+  n <- nrow(arcs)
+  if (n == 0) {
+    x$arcs <- arcs
+    return(x)
+  }
+  
+  # storage for actual endpoint coordinates
+  p1 <- matrix(NA_real_, n, 2)
+  p2 <- matrix(NA_real_, n, 2)
+  
+  for (i in seq_len(n)) {
+    rowi <- arcs[i, ]
+    
+    v     <- c(rowi[[vx_name]], rowi[[vy_name]])
+    theta <- rowi[["theta"]]
+    r     <- rowi[["r"]]
+    cc    <- c(rowi[["c1"]], rowi[["c2"]])
+    
+    # same angle construction as in ah2sf()
+    ang <- alphahull::anglesArc(v, theta)
+    
+    # geometric endpoints of the arc
+    p1[i, ] <- c(
+      cc[1] + r * cos(ang[1]),
+      cc[2] + r * sin(ang[1])
+    )
+    p2[i, ] <- c(
+      cc[1] + r * cos(ang[2]),
+      cc[2] + r * sin(ang[2])
+    )
+  }
+  
+  # tolerance-based point deduplication
+  # round first to stabilise tiny floating-point noise
+  keyfun <- function(mat, tol, rnd) {
+    xk <- round(mat[, 1], rnd)
+    yk <- round(mat[, 2], rnd)
+    paste(round(xk / tol), round(yk / tol), sep = "_")
+  }
+  
+  k1 <- keyfun(p1, tol = tol, rnd = rnd)
+  k2 <- keyfun(p2, tol = tol, rnd = rnd)
+  
+  all_keys <- c(k1, k2)
+  all_pts  <- rbind(p1, p2)
+  
+  keep <- !duplicated(all_keys)
+  uniq_keys <- all_keys[keep]
+  uniq_pts  <- all_pts[keep, , drop = FALSE]
+  
+  idx <- match(all_keys, uniq_keys)
+  end1 <- idx[seq_len(n)]
+  end2 <- idx[n + seq_len(n)]
+  
+  arcs$end1 <- end1
+  arcs$end2 <- end2
+  
+  # optional: rebuild xahull consistently
+  x$xahull <- data.frame(x = uniq_pts[, 1], y = uniq_pts[, 2])
+  
+  x$arcs <- arcs
+  x
+}
 
 #' Convert alpha hulls into sf POLYGON object
 #'
@@ -108,6 +182,15 @@ ah2sf <- function (x, increment = 360, rnd = 10, crs = 4326, tol = 1e-04){
     stop("x needs to be an ahull class object")
   }
   xdf <- as.data.frame(x$arcs)
+  
+  # Auto-repair end1/end2 if missing or all zero
+  if (!all(c("end1", "end2") %in% names(xdf)) ||
+      all(xdf$end1 == 0) || all(xdf$end2 == 0) ||
+      any(is.na(xdf$end1)) || any(is.na(xdf$end2))) {
+    x <- fill_arc_endpoints(x, tol = tol, rnd = rnd)
+    xdf <- as.data.frame(x$arcs)
+  }
+  
   k <- 1
   xdf <- cbind(xdf, flip = rep(FALSE, nrow(xdf)))
   repeat {

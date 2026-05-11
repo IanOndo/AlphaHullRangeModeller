@@ -214,4 +214,327 @@ getDynamicAlphaHull <- function (x, fraction = 0.95, partCount = 3, buff = 10000
   return(list(hull, alpha = paste("alpha", alphaVal, sep = "")))
 }
 
+#' @export
+getDynamicRcppAlphaHull <- function (x, fraction = 0.95, partCount = 3, buff = 10000, initialAlpha = 3, 
+                                 coordHeaders = c("Longitude", "Latitude"), clipToCoast = "terrestrial", 
+                                 alphaIncrement = 1, verbose = FALSE, alphaCap = 400) {
+  if (clipToCoast == FALSE) 
+    clipToCoast <- "no"
+  clipToCoast <- match.arg(clipToCoast, c("no", "terrestrial","aquatic"))
+  if (ncol(x) == 2) {
+    coordHeaders <- c(1, 2)
+  }
+  x <- x[!duplicated(x[, coordHeaders]), coordHeaders]
+  x <- x[stats::complete.cases(x), ]
+  if (nrow(x) < 3) {
+    stop("This function requires a minimum of 3 unique coordinates (after removal of duplicates).")
+  }
+  while ((x[1, coordHeaders[1]] == x[2, coordHeaders[1]] & 
+          x[2, coordHeaders[1]] == x[3, coordHeaders[1]]) | 
+         (x[1,2] == x[2, coordHeaders[2]] & x[2, coordHeaders[2]] == x[3, coordHeaders[2]])) {
+    x <- x[sample(1:nrow(x), size = nrow(x)), ]
+  }
+  
+  x <- sf::st_as_sf(as.data.frame(x), coords = 1:2, crs = 4326)
+  if (nrow(x) < 3) {
+    stop("This function requires a minimum of 3 unique coordinates.")
+  }
+  
+  alpha <- initialAlpha
+  problem <- FALSE
+  if (verbose) 
+    cat("\talpha:", alpha, "\n")
+  xy <- sf::st_coordinates(x)
+  hull <- try(RcppAlphahull::ahull(xy[,1], xy[,2], alpha = alpha), 
+              silent = TRUE)
+  hull <- rcppah2ah(hull,xy)  # fix the hull returned by RcppAlphahull (to match alphahull)
+  dropPt <- c()
+  while (inherits(hull, "try-error") & any(grepl("duplicate points", hull))) {
+    ptDist <- sf::st_distance(x, x)
+    diag(ptDist) <- NA
+    units(ptDist) <- NULL
+    closest <- which(ptDist == min(ptDist, na.rm = TRUE), 
+                     arr.ind = TRUE)
+    xy <- sf::st_coordinates(x)[-closest[1,1]] # modified by I. Ondo on 18/03/2026
+    hull <- try(RcppAlphahull::ahull(xy[,1], xy[,2], alpha = alpha),
+                silent = TRUE)
+    hull <- rcppah2ah(hull,xy) 
+    if (inherits(hull, "ahull")) {
+      dropPt <- closest[1, 1]
+    }
+  }
+  if (length(dropPt) > 0) {
+    x <- x[-dropPt, ]
+  }
+  xy <- sf::st_coordinates(x)
+  hull <- try(RcppAlphahull::ahull(xy[,1], xy[,2], alpha = alpha), 
+              silent = TRUE)
+  hull <- rcppah2ah(hull,xy) 
+  while (inherits(hull, "try-error")) {
+    if (verbose) {
+      cat("\talpha:", alpha, "\n")
+    }
+    # add a jitter to the coordinates to avoid the duplicated points error message
+    x<- sf::st_jitter(x)
+    alpha <- alpha + alphaIncrement
+    xy <- sf::st_coordinates(x)
+    hull <- try(RcppAlphahull::ahull(xy[,1], xy[,2], alpha = alpha), 
+                silent = TRUE)
+    hull <- rcppah2ah(hull,xy) 
+    if (alpha > alphaCap) {
+      problem <- TRUE
+      break
+    }
+  }
+  if (!problem) {
+    hull <- try(AlphaHullRangeModeller::ah2sf(hull),silent=TRUE)
+    validityCheck <- function(hull) {
+      if (!is.null(hull) & !inherits(hull, "try-error")) {
+        if (!all(sf::st_is_valid(hull))) {
+          TRUE
+        }
+        else {
+          FALSE
+        }
+      }
+      else {
+        FALSE
+      }
+    }
+    while (is.null(hull) | inherits(hull, "try-error") | 
+           validityCheck(hull)) {
+      alpha <- alpha + alphaIncrement
+      if (verbose) {
+        cat("\talpha:", alpha, "\n")
+      }
+      xy <- sf::st_coordinates(x)
+      hull <- try(AlphaHullRangeModeller::ah2sf(RcppAlphahull::ahull(xy[,1], xy[,2], 
+                                                                 alpha = alpha)), silent = TRUE)
+      hull <- rcppah2ah(hull,xy) 
+      if (alpha > alphaCap) {
+        problem <- TRUE
+        break
+      }
+    }
+    pointWithin <- sf::st_intersects(x, hull)
+    alphaVal <- alpha
+    buffered <- FALSE
+    buff <- units::set_units(buff, "m")
+    while (any(length(hull) > partCount, (sum(lengths(pointWithin))/nrow(x)) < 
+               fraction, !all(sf::st_is_valid(hull)))) {
+      alpha <- alpha + alphaIncrement
+      if (verbose) {
+        cat("\talpha:", alpha, "\n")
+      }
+      xy <- sf::st_coordinates(x)
+      hull <- try(RcppAlphahull::ahull(xy[,1], xy[,2], 
+                                   alpha = alpha), silent = TRUE)
+      hull <- rcppah2ah(hull,xy) 
+      while (inherits(hull, "try-error") & alpha <= alphaCap) {
+        alpha <- alpha + alphaIncrement
+        hull <- try(RcppAlphahull::ahull(xy[,1], xy[,2], 
+                                     alpha = alpha), silent = TRUE)
+        hull <- rcppah2ah(hull,xy)
+      }
+      if (!inherits(hull, "try-error")) {
+        hull <- AlphaHullRangeModeller::ah2sf(hull)
+        hull <- sf::st_transform(hull, crs = "+proj=eqearth")
+        if (all(sf::st_is_valid(hull))) {
+          hull <- sf::st_buffer(hull, dist = buff)
+          hull <- sf::st_transform(hull, crs = 4326)
+          buffered <- TRUE
+          pointWithin <- sf::st_intersects(x, hull)
+        }
+      }
+      alphaVal <- alpha
+      if (alpha > alphaCap) {
+        hull <- sf::st_convex_hull(sf::st_union(x))
+        hull <- sf::st_transform(hull, crs = "+proj=eqearth")
+        hull <- sf::st_buffer(hull, dist = buff)
+        hull <- sf::st_transform(hull, crs = 4326)
+        buffered <- TRUE
+        alphaVal = "MCH"
+        break
+      }
+    }
+  }
+  else {
+    hull <- sf::st_convex_hull(sf::st_union(x))
+    hull <- sf::st_transform(hull, crs = "+proj=eqearth")
+    hull <- sf::st_buffer(hull, dist = buff)
+    hull <- sf::st_transform(hull, crs = 4326)
+    buffered <- TRUE
+    alphaVal = "MCH"
+  }
+  if (!buffered) {
+    hull <- sf::st_transform(hull, crs = "+proj=eqearth")
+    hull <- sf::st_buffer(hull, dist = buff)
+    hull <- sf::st_transform(hull, crs = 4326)
+  }
+  if (clipToCoast != "no") {
+    world <- rangeBuilder:::loadWorldMap()
+    if (clipToCoast == "terrestrial") {
+      hull <- sf::st_intersection(hull, world)
+    }
+    else {
+      hull <- sf::st_difference(hull, world)
+    }
+  }
+  return(list(hull, alpha = paste("alpha", alphaVal, sep = "")))
+}
 
+#' @export
+getDynamicFastAlphaHull <- function (x, fraction = 0.95, partCount = 3, buff = 10000, initialAlpha = 3, 
+                                 coordHeaders = c("Longitude", "Latitude"), clipToCoast = "terrestrial", 
+                                 alphaIncrement = 1, verbose = FALSE, alphaCap = 400) {
+  if (clipToCoast == FALSE) 
+    clipToCoast <- "no"
+  clipToCoast <- match.arg(clipToCoast, c("no", "terrestrial","aquatic"))
+  if (ncol(x) == 2) {
+    coordHeaders <- c(1, 2)
+  }
+  x <- x[!duplicated(x[, coordHeaders]), coordHeaders]
+  x <- x[stats::complete.cases(x), ]
+  if (nrow(x) < 3) {
+    stop("This function requires a minimum of 3 unique coordinates (after removal of duplicates).")
+  }
+  while ((x[1, coordHeaders[1]] == x[2, coordHeaders[1]] & 
+          x[2, coordHeaders[1]] == x[3, coordHeaders[1]]) | 
+         (x[1,2] == x[2, coordHeaders[2]] & x[2, coordHeaders[2]] == x[3, coordHeaders[2]])) {
+    x <- x[sample(1:nrow(x), size = nrow(x)), ]
+  }
+  
+  x <- sf::st_as_sf(as.data.frame(x), coords = 1:2, crs = 4326)
+  if (nrow(x) < 3) {
+    stop("This function requires a minimum of 3 unique coordinates.")
+  }
+  
+  alpha <- initialAlpha
+  problem <- FALSE
+  if (verbose) 
+    cat("\talpha:", alpha, "\n")
+  hull <- try(ahull_fast(sf::st_coordinates(x), alpha = alpha), 
+              silent = TRUE)
+  dropPt <- c()
+  while (inherits(hull, "try-error") & any(grepl("duplicate points", hull))) {
+    ptDist <- sf::st_distance(x, x)
+    diag(ptDist) <- NA
+    units(ptDist) <- NULL
+    closest <- which(ptDist == min(ptDist, na.rm = TRUE), 
+                     arr.ind = TRUE)
+    hull <- try(ahull_fast(sf::st_coordinates(x)[-closest[1,1]], alpha = alpha),
+                silent = TRUE)
+    if (inherits(hull, "ahull")) {
+      dropPt <- closest[1, 1]
+    }
+  }
+  if (length(dropPt) > 0) {
+    x <- x[-dropPt, ]
+  }
+  hull <- try(ahull_fast(sf::st_coordinates(x), alpha = alpha), 
+              silent = TRUE)
+  while (inherits(hull, "try-error")) {
+    if (verbose) {
+      cat("\talpha:", alpha, "\n")
+    }
+    # add a jitter to the coordinates to avoid the duplicated points error message
+    x<- sf::st_jitter(x)
+    alpha <- alpha + alphaIncrement
+    hull <- try(ahull_fast(sf::st_coordinates(x), alpha = alpha), 
+                silent = TRUE)
+    if (alpha > alphaCap) {
+      problem <- TRUE
+      break
+    }
+  }
+  if (!problem) {
+    hull <- try(AlphaHullRangeModeller::ah2sf(hull),silent=TRUE)
+    validityCheck <- function(hull) {
+      if (!is.null(hull) & !inherits(hull, "try-error")) {
+        if (!all(sf::st_is_valid(hull))) {
+          TRUE
+        }
+        else {
+          FALSE
+        }
+      }
+      else {
+        FALSE
+      }
+    }
+    while (is.null(hull) | inherits(hull, "try-error") | 
+           validityCheck(hull)) {
+      alpha <- alpha + alphaIncrement
+      if (verbose) {
+        cat("\talpha:", alpha, "\n")
+      }
+      hull <- try(AlphaHullRangeModeller::ah2sf(ahull_fast(sf::st_coordinates(x), 
+                                                                 alpha = alpha)), silent = TRUE)
+      if (alpha > alphaCap) {
+        problem <- TRUE
+        break
+      }
+    }
+    pointWithin <- sf::st_intersects(x, hull)
+    alphaVal <- alpha
+    buffered <- FALSE
+    buff <- units::set_units(buff, "m")
+    while (any(length(hull) > partCount, (sum(lengths(pointWithin))/nrow(x)) < 
+               fraction, !all(sf::st_is_valid(hull)))) {
+      alpha <- alpha + alphaIncrement
+      if (verbose) {
+        cat("\talpha:", alpha, "\n")
+      }
+      hull <- try(ahull_fast(sf::st_coordinates(x), 
+                                   alpha = alpha), silent = TRUE)
+      while (inherits(hull, "try-error") & alpha <= alphaCap) {
+        alpha <- alpha + alphaIncrement
+        hull <- try(ahull_fast(sf::st_coordinates(x), 
+                                     alpha = alpha), silent = TRUE)
+      }
+      if (!inherits(hull, "try-error")) {
+        hull <- AlphaHullRangeModeller::ah2sf(hull)
+        hull <- sf::st_transform(hull, crs = "+proj=eqearth")
+        if (all(sf::st_is_valid(hull))) {
+          hull <- sf::st_buffer(hull, dist = buff)
+          hull <- sf::st_transform(hull, crs = 4326)
+          buffered <- TRUE
+          pointWithin <- sf::st_intersects(x, hull)
+        }
+      }
+      alphaVal <- alpha
+      if (alpha > alphaCap) {
+        hull <- sf::st_convex_hull(sf::st_union(x))
+        hull <- sf::st_transform(hull, crs = "+proj=eqearth")
+        hull <- sf::st_buffer(hull, dist = buff)
+        hull <- sf::st_transform(hull, crs = 4326)
+        buffered <- TRUE
+        alphaVal = "MCH"
+        break
+      }
+    }
+  }
+  else {
+    hull <- sf::st_convex_hull(sf::st_union(x))
+    hull <- sf::st_transform(hull, crs = "+proj=eqearth")
+    hull <- sf::st_buffer(hull, dist = buff)
+    hull <- sf::st_transform(hull, crs = 4326)
+    buffered <- TRUE
+    alphaVal = "MCH"
+  }
+  if (!buffered) {
+    hull <- sf::st_transform(hull, crs = "+proj=eqearth")
+    hull <- sf::st_buffer(hull, dist = buff)
+    hull <- sf::st_transform(hull, crs = 4326)
+  }
+  if (clipToCoast != "no") {
+    world <- rangeBuilder:::loadWorldMap()
+    if (clipToCoast == "terrestrial") {
+      hull <- sf::st_intersection(hull, world)
+    }
+    else {
+      hull <- sf::st_difference(hull, world)
+    }
+  }
+  return(list(hull, alpha = paste("alpha", alphaVal, sep = "")))
+}
