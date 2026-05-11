@@ -1,0 +1,71 @@
+#' Fast Delaunay–Voronoi mesh construction using C++
+#'
+#' Computes the Delaunay triangulation and associated Voronoi edge structure
+#' for a set of planar points using a C++ backend. This function is intended as
+#' a faster drop-in replacement for \code{\link[alphahull]{delvor}} from the
+#' \pkg{alphahull} package.
+#'
+#' The triangulation is computed in C++ using a half-edge Delaunay algorithm
+#' adapted from \pkg{ppmData}. The resulting Voronoi edge structure is returned
+#' in the same format expected by downstream functions such as
+#' \code{\link[alphahull]{ashape}} and \code{\link[alphahull]{ahull}}.
+#'
+#' The returned object contains a matrix \code{mesh} describing the dual
+#' relationship between Delaunay edges and Voronoi edges. Each row corresponds
+#' to one Delaunay edge and includes the coordinates of the two data points
+#' defining the edge and the coordinates of the two Voronoi vertices
+#' associated with that edge.
+#'
+#' This function is designed for performance when working with large point
+#' sets where the R implementation of \code{delvor} becomes a bottleneck.
+#'
+#' @param x A vector of x coordinates, a two-column matrix of coordinates, or
+#' an object coercible via \code{\link[grDevices]{xy.coords}}.
+#' @param y Optional vector of y coordinates if \code{x} contains only x values.
+#'
+#' @return An object of class \code{"delvor"} containing:
+#' \describe{
+#'   \item{mesh}{A numeric matrix describing the Delaunay–Voronoi edge
+#'   structure with columns
+#'   \code{ind1}, \code{ind2}, \code{x1}, \code{y1}, \code{x2}, \code{y2},
+#'   \code{mx1}, \code{my1}, \code{mx2}, \code{my2}, \code{bp1}, \code{bp2}.}
+#'   \item{x}{The original input coordinates.}
+#'   \item{tri.obj}{Placeholder for triangulation information (currently
+#'   \code{NULL}).}
+#' }
+#'
+#' @details
+#' This function mirrors the output structure of \code{\link[alphahull]{delvor}}
+#' so that it can be used transparently with existing functions in the
+#' \pkg{alphahull} workflow.
+#'
+#' Compared to the original implementation, triangulation and Voronoi
+#' construction are performed in C++, which can substantially reduce runtime
+#' for large datasets.
+#'
+#' @references
+#' Pateiro-López, B., & Rodríguez-Casal, A. (2010).
+#' \emph{ Generalizing the Convex Hull of a Sample: The R Package alphahull. Journal of Statistical Software, 34(5), 1–28. https://doi.org/10.18637/jss.v034.i05}.
+#'
+#' The triangulation algorithm is adapted from the half-edge Delaunay
+#' implementation used in the \pkg{ppmData} package.
+#'
+#' @seealso
+#' \code{\link[alphahull]{delvor}}, \code{\link[alphahull]{ashape}},
+#' \code{\link[alphahull]{ahull}}
+#'
+#' @examples
+#' pts <- matrix(runif(200), ncol = 2)
+#'
+#' dv <- delvor_fast(pts)
+#'
+#' str(dv$mesh)
+#'
+#' @export
+delvor_fast <- function(x, y = NULL) {
+  X <- xy.coords(x, y)
+  out <- delvor_rcpp(cbind(X$x, X$y))
+  rownames(out$mesh) <- rep("", nrow(out$mesh))
+  class(out) <- "delvor"
+  out
+}
