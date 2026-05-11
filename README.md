@@ -31,12 +31,10 @@ and facilitate range estimates. 
       buffer size is set to the tenth of the maximum interpoint
       distance) to better capture subpopulation structure (Rivers et al.
       2010).
-
 - 2)  Polygon ranges crossing or intersecting the $180^{th}$ meridian
       (or international date line) are impossible to generate, so
       alpha-hulls are generated using geographically split occurrence
       records, then recombined.
-
 - 3)  The main function, `Make_alpha_hulls`, can be run in parallel to
       help streamlining the generation of hundreds of thousands of
       species range polygons. It is very useful for developing modelling
@@ -54,11 +52,14 @@ source, so if you are on Windows, you need to install
 Install *AlphaHullRangeModeller* with the following instructions:
 
 ``` r
-devtools::install_github("IanOndo/AlphaHullRangeModeller")
+devtools::install_github("IanOndo/AlphaHullRangeModeller") # for the main branch
+devtools::install_github("IanOndo/AlphaHullRangeModeller", ref="devel") # for the development branch
+
 library(AlphaHullRangeModeller)
 ```
 
-<div id="refs" class="references csl-bib-body hanging-indent">
+<div id="refs" class="references csl-bib-body hanging-indent"
+entry-spacing="0">
 
 <div id="ref-Jung2021" class="csl-entry">
 
